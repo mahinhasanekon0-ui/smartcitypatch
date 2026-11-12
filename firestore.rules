@@ -1,0 +1,101 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Catch-all Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // Root Admin (By Email)
+    function isRootAdmin() {
+      return isSignedIn() && request.auth.token.email == 'mahinhasanekon0@gmail.com';
+    }
+    
+    function isAdmin() { 
+      return isRootAdmin() || (isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn(); // Relaxed for dev, or return request.auth.token.email_verified == true;
+    }
+
+    // --- Validation Blueprints ---
+    
+    function isValidUser(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100
+          && data.email is string && data.email.size() > 5
+          && data.role in ['donor', 'receiver', 'admin']
+          && (data.phone == null || (data.phone is string && data.phone.size() <= 20))
+          && (data.profileImage == null || (data.profileImage is string && data.profileImage.size() < 1000))
+          && (data.createdAt == null || data.createdAt is string);
+    }
+
+    function isValidReport(data) {
+      return data.userId == request.auth.uid
+          && data.userName is string && data.userName.size() > 0
+          && data.description is string && data.description.size() > 0 && data.description.size() < 5000
+          && data.category is string && data.category.size() > 0
+          && data.status in ['pending', 'in-progress', 'resolved']
+          && data.createdAt is string
+          && (data.fileUrl == null || data.fileUrl is string)
+          && (data.location == null || data.location is map);
+    }
+
+    function isValidDonor(data) {
+      return data.userId == request.auth.uid
+          && data.name is string && data.name.size() > 0
+          && data.bloodGroup in ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+          && data.phone is string && data.phone.size() > 5
+          && data.availability is bool
+          && data.updatedAt is string;
+    }
+
+    // --- Rules ---
+
+    // USERS
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin(); 
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().role != 'admin';
+      allow update: if (isOwner(userId) && isValidUser(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'profileImage', 'role']) &&
+        (existing().role == 'admin' ? true : incoming().role != 'admin')
+      )) || isAdmin();
+    }
+
+    // REPORTS
+    match /reports/{reportId} {
+      allow get: if true;
+      allow list: if isAdmin() || (isVerifiedUser() && resource.data.userId == request.auth.uid) || (resource.data.status in ['pending', 'in-progress', 'resolved']); // Ownership or Status Enforcer
+      allow create: if isVerifiedUser() && isValidReport(incoming()) && incoming().status == 'pending';
+      allow update: if isVerifiedUser() && (
+        isAdmin() || 
+        (isOwner(existing().userId) && existing().status == 'pending' && incoming().diff(existing()).affectedKeys().hasOnly(['description', 'category', 'fileUrl']) && isValidReport(incoming()))
+      );
+      allow delete: if isAdmin();
+    }
+
+    // DONORS
+    match /donors/{donorId} {
+      allow get: if true;
+      allow list: if isAdmin() || (isVerifiedUser() && resource.data.userId == request.auth.uid) || (resource.data.availability == true); // Ownership or Availability Enforcer
+      allow create: if isOwner(donorId) && isValidDonor(incoming());
+      allow update: if (isOwner(donorId) && isValidDonor(incoming()) && incoming().userId == existing().userId) || isAdmin();
+      allow delete: if isOwner(donorId) || isAdmin();
+    }
+
+    // SYSTEM
+    match /system/connection-test {
+      allow get: if true;
+    }
+  }
+}

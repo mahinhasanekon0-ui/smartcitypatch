@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user profiles with role-based attributes",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["donor", "receiver", "admin"] },
+        "phone": { "type": "string" },
+        "profileImage": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Emergency or grievance reports submitted by users",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "location": { "type": "object" },
+        "status": { "type": "string", "enum": ["pending", "in-progress", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "description", "category", "status"]
+    },
+    "Donor": {
+      "title": "Donor",
+      "description": "Blood donor specific information connected to a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "bloodGroup": { "type": "string", "enum": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] },
+        "phone": { "type": "string" },
+        "availability": { "type": "boolean" },
+        "name": { "type": "string" },
+        "locationName": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "bloodGroup", "phone", "availability"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Public health or emergency reports"
+    },
+    "/donors/{donorId}": {
+      "schema": "Donor",
+      "description": "List of active blood donors"
+    }
+  }
+}

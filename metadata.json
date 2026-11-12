@@ -1,0 +1,8 @@
+{
+  "name": "Smart City Patch",
+  "description": "A comprehensive community safety and healthcare platform. Featuring real-time emergency reports, blood donor mapping, and one-click emergency access for a smarter city.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}
